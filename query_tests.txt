@@ -1,0 +1,144 @@
+column table_name format a20
+column column_name format a20
+column data_type format a20
+column data_length format a20
+set linesize 100;
+
+SELECT
+table_name,
+column_name,
+data_type,
+data_length
+FROM all_tab_columns
+WHERE
+table_name like 'GWIS%';
+
+SELECT * FROM (
+SELECT 
+    a.APP_NO, 
+    a.APPLIES_TO_DATE,
+    a.SUBM_VALUE AS SUBM_VALUE_VIEW1,
+    b.SUBM_VALUE AS SUBM_VALUE_VIEW2
+FROM WSUP.GWIS_WU_SIMPLES_VW a
+JOIN WSUP.GWIS_WU_TOTALS_VW b 
+    ON a.APP_NO = b.APP_NO 
+    AND a.APPLIES_TO_DATE = b.APPLIES_TO_DATE
+ORDER BY a.APP_NO, a.APPLIES_TO_DATE
+)
+WHERE rownum <= 100;
+
+SELECT APP_NO, ANNUAL_ALLOC
+FROM WSUP.GWIS_WU_Allocation
+WHERE ANNUAL_ALLOC IS NOT NULL
+ORDER BY ANNUAL_ALLOC DESC
+FETCH FIRST 100 ROWS ONLY;
+
+
+SELECT 
+    a.APP_NO, 
+    a.ANNUAL_ALLOC,
+    p.PROJECT_NAME
+FROM WSUP.GWIS_WU_Allocation a
+JOIN WSUP.GWIS_PERMIT_INFO p 
+    ON a.APP_NO = p.APP_NO
+	WHERE a.ANNUAL_ALLOC IS NOT NULL
+ORDER BY a.ANNUAL_ALLOC DESC
+FETCH FIRST 100 ROWS ONLY;
+
+SELECT site_id, AVG(subm_value) AS avg_monthly_use
+FROM WSUP.GWIS_Water_Use
+WHERE subm_value_units = 'MG/MONTH'
+GROUP BY site_id
+FETCH FIRST 100 ROWS ONLY;
+
+SELECT u.app_no, u.subm_value, a.annual_alloc
+FROM WSUP.GWIS_WATER_USE u
+JOIN WSUP.GWIS_WU_ALLOCATION a ON u.app_no = a.app_no
+WHERE u.report_type = 'TOTAL'
+FETCH FIRST 100 ROWS ONLY;
+
+SELECT FACINV_TYPE, COUNT(*) AS facility_count
+FROM WSUP.GWIS_WU_Facilities
+GROUP BY FACINV_TYPE;
+
+SELECT 
+    r.cnty_code,
+    c.county,
+    SUM(w.subm_value) AS total_use
+FROM WSUP.GWIS_APP_COUNTIES r
+JOIN WSUP.GWIS_Water_Use w 
+    ON r.admin_app_no = w.app_no
+JOIN WSUP.GWIS_TL_COUNTIES c 
+    ON r.cnty_code = c.county_code
+GROUP BY r.cnty_code, c.county
+ORDER BY total_use DESC;
+
+SELECT l.landuse_desc, AVG(a.irr_eff) AS avg_efficiency
+FROM WSUP.GWIS_Ag_Irr_Acres a
+JOIN WSUP.GWIS_TL_Land_Use l ON a.lu_code = l.landuse_code
+GROUP BY l.landuse_desc;
+
+
+SELECT column_name FROM all_tab_columns WHERE table_name = 'GWIS_DATA_INDEX';
+
+
+SELECT *
+FROM WSUP.GWIS_PERMIT_INFO pi JOIN
+WSUP.GWIS_APP_COUNTIES ap ON
+pi.app_no = ap.admin_app_no
+FETCH FIRST 100 ROWS ONLY;
+
+SELECT 
+    a.total_rows,
+    b.distinct_combinations
+FROM
+    (SELECT COUNT(*) AS total_rows FROM GWIS_APP_COUNTIES) a
+CROSS JOIN
+    (SELECT COUNT(*) AS distinct_combinations 
+     FROM (SELECT admin_app_no, cnty_code, priority 
+           FROM GWIS_APP_COUNTIES 
+           GROUP BY admin_app_no, cnty_code, priority)
+    ) b;
+
+-- if i want to see all entries with matching admin_app_no and cnty_code
+SELECT admin_app_no, cnty_code, COUNT(*) AS count
+FROM GWIS_APP_COUNTIES
+GROUP BY admin_app_no, cnty_code
+HAVING COUNT(*) > 1;
+
+
+INSERT INTO WSUP.GWIS_WATER_USE (
+    APP_NO, APPLIES_TO_DATE, SUBM_VALUE, SUBM_VALUE_UNITS, SUBM_TYPE, REQ_NAME, REPORT_TYPE, SITE_ID, QUALIFIER
+) VALUES (
+    '111111', CURRENT_DATE, 0, MG/MONTH, 4, 'REQ', 'report', '11111', '')
+
+SELECT app_no, applies_to_date, subm_value, subm_value_units, subm_type, req_name, report_type, site_id, qualifier, COUNT(*) AS count
+FROM GWIS_WATER_USE
+GROUP BY app_no, applies_to_date, subm_value, subm_value_units, subm_type, req_name, report_type, site_id, qualifier
+HAVING COUNT(*) > 1;
+
+SELECT SUM(duplicate_count - 1) AS total_duplicates
+FROM (
+    SELECT COUNT(*) AS duplicate_count
+    FROM GWIS_WATER_USE
+    GROUP BY app_no, applies_to_date, subm_value, subm_value_units, subm_type, req_name, report_type, site_id, qualifier
+    HAVING COUNT(*) > 1
+);
+
+WITH ranked_data AS (
+    SELECT column1, column2, column3, 
+           ROW_NUMBER() OVER (PARTITION BY column1, column2, column3 ORDER BY id) AS row_num
+    FROM table_name
+)
+DELETE FROM table_name
+WHERE (column1, column2, column3) IN (
+    SELECT column1, column2, column3 FROM ranked_data WHERE row_num > 1
+);
+
+
+CREATE TABLE GWIS_WU_ALLOCATION AS
+SELECT * FROM WSUP.GWIS_WU_ALLOCATION;
+
+
+
+
